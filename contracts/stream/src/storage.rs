@@ -70,6 +70,12 @@ pub enum DataKey {
     StreamCompleted,
     /// Stream cancellation configuration (Issue #685).
     StreamConfig,
+    /// Optional stream title updated post-creation by sender.
+    /// Allows sender to rename or describe the stream.
+    StreamTitle,
+    /// Optional reference tag (e.g. invoice, order, or external ID).
+    /// Allows sender to link the stream to external systems.
+    ReferenceTag,
 }
 
 /// Immutable stream configuration stored in instance storage for cheaper reads (Issue #702).

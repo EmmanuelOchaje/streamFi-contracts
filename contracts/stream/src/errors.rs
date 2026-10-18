@@ -34,5 +34,7 @@ pub enum Error {
     ContractPaused = 23,
     /// The stream is non-cancelable (Issue #685).
     StreamNotCancelable = 24,
+    /// The stream cannot be created with a zero rate per second.
+    ZeroRateStreamNotAllowed = 25,
 }
 

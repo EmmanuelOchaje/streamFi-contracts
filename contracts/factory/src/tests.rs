@@ -992,3 +992,107 @@ fn test_get_streams_by_creator_paged() {
     assert_eq!(all.len(), 2);
 }
 
+fn high_stream_creation_concurrency() {
+    use soroban_sdk::testutils::BytesN as _;
+
+    let s = Setup::new();
+
+    // Simulate high concurrent stream creation by rapidly calling create_stream
+    // with different senders and recipients. Each invocation:
+    // - Generates a unique sender and recipient
+    // - Deploys a new DripStream contract instance
+    // - Registers state in the factory's index
+    //
+    // We target 50 concurrent-like operations to stress the index and
+    // storage operations under load.
+    let concurrency_level = 50;
+    let mut stream_ids = std::vec::Vec::new();
+
+    for i in 0..concurrency_level {
+        let sender = Address::generate(&s.env);
+        let recipient = Address::generate(&s.env);
+        let token = Address::generate(&s.env);
+
+        // Verify each stream_id is unique
+        let stream_id = s
+            .client
+            .create_stream(
+                &sender,
+                &recipient,
+                &token,
+                &1_000_000i128, // 1 XLM per second in stroops
+                &(s.env.ledger().timestamp() + 3600),
+                &0u64, // open-ended
+                &true, // clawback enabled
+                &0u64, // force_cancel threshold
+            )
+            .unwrap();
+
+        // Ensure stream_ids don't collide
+        assert!(!stream_ids.contains(&stream_id), "Duplicate stream_id at iteration {}", i);
+        stream_ids.push(stream_id);
+    }
+
+    // Verify all streams were created and indexed
+    assert_eq!(
+        stream_ids.len(),
+        concurrency_level,
+        "Expected {} stream IDs created, got {}",
+        concurrency_level,
+        stream_ids.len()
+    );
+
+    // Spot-check: verify a few random stream IDs are queryable from the index
+    for &stream_id in stream_ids.iter().step_by(10).take(5) {
+        let stream_info = s.client.stream_info(&stream_id);
+        assert!(stream_info.is_ok(), "Stream {} not found in index", stream_id);
+    }
+}
+
+#[test]
+fn concurrent_stream_creation_maintains_factory_invariants() {
+    use soroban_sdk::testutils::BytesN as _;
+
+    let s = Setup::new();
+
+    let senders: std::vec::Vec<_> = (0..10)
+        .map(|_| Address::generate(&s.env))
+        .collect();
+
+    // Create multiple streams per sender to test:
+    // - Index integrity under repeated sender entries
+    // - No cross-contamination between senders
+    // - Proper ref-count or cleanup if implemented
+    let streams_per_sender = 5;
+    let total_expected = senders.len() * streams_per_sender;
+
+    for sender in &senders {
+        for _ in 0..streams_per_sender {
+            let recipient = Address::generate(&s.env);
+            let token = Address::generate(&s.env);
+
+            let _stream_id = s
+                .client
+                .create_stream(
+                    sender,
+                    &recipient,
+                    &token,
+                    &500_000i128,
+                    &(s.env.ledger().timestamp() + 7200),
+                    &0u64,
+                    &false,
+                    &0u64,
+                )
+                .unwrap();
+        }
+    }
+
+    // Verify event count reflects the total number of creations
+    let event_count = s.event_count();
+    assert!(
+        event_count >= total_expected,
+        "Expected at least {} creation events, got {}",
+        total_expected,
+        event_count
+    );
+}

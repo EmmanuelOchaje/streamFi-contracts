@@ -1270,6 +1270,42 @@ impl DripStream {
     /// Read-only: get the configured split configuration, if any.
     pub fn split_recipient(env: Env) -> Option<SplitConfig> {
         env.storage().instance().get(&DataKey::SplitConfig)
+    /// Sender updates the stream's title (descriptive name).
+    pub fn set_stream_title(env: Env, caller: Address, title: String) -> Result<(), Error> {
+        let info = state::load(&env);
+        state::assert_not_cancelled(&info)?;
+        if caller != info.sender {
+            return Err(Error::NotAuthorized);
+        }
+        caller.require_auth();
+        ttl::bump(&env);
+
+        env.storage().instance().set(&DataKey::StreamTitle, &title);
+        Ok(())
+    }
+
+    /// Sender updates the stream's reference tag (e.g. invoice, order ID).
+    pub fn set_reference_tag(env: Env, caller: Address, tag: String) -> Result<(), Error> {
+        let info = state::load(&env);
+        state::assert_not_cancelled(&info)?;
+        if caller != info.sender {
+            return Err(Error::NotAuthorized);
+        }
+        caller.require_auth();
+        ttl::bump(&env);
+
+        env.storage().instance().set(&DataKey::ReferenceTag, &tag);
+        Ok(())
+    }
+
+    /// Read-only: the current stream title, if set.
+    pub fn stream_title(env: Env) -> Option<String> {
+        env.storage().instance().get(&DataKey::StreamTitle)
+    }
+
+    /// Read-only: the current reference tag, if set.
+    pub fn reference_tag(env: Env) -> Option<String> {
+        env.storage().instance().get(&DataKey::ReferenceTag)
     }
 
     /// Read-only: total tokens streamed so far (regardless of withdrawals).
